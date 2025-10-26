@@ -1,0 +1,104 @@
+networks:
+  backend:
+
+services:
+  php:
+    image: wodby/php:8.3
+    container_name: "b24_php"
+    environment:
+      PHP_FPM_USER: wodby
+      PHP_FPM_GROUP: wodby
+      PHP_XDEBUG: 1
+      PHP_XDEBUG_MODE: debug
+      PHP_IDE_CONFIG: serverName=patio
+      PHP_XDEBUG_START_WITH_REQUEST: "yes"
+      PHP_XDEBUG_IDEKEY: "patio"
+      PHP_XDEBUG_CLIENT_HOST: host.docker.internal # macOS
+      PHP_XDEBUG_LOG: /tmp/php-xdebug.log
+    volumes:
+      - ./:/var/www/html
+      - ./xdebug:/mnt/files
+    networks:
+      - backend
+  pma_prod:
+    image: phpmyadmin
+    restart: always
+    ports:
+      - 9090:80
+    environment:
+      - PMA_HOST=${DB_HOST}
+      - PMA_USER=${DB_USERNAME}
+      - PMA_PASSWORD=Uv5lMYr1O4JAjHGRdhcKui6zb
+  pma:
+    image: phpmyadmin
+    restart: always
+    ports:
+      - 8080:80
+    environment:
+      - PMA_HOST=${DB_HOST}
+      - PMA_USER=${DB_USERNAME}
+      - PMA_PASSWORD=${DB_PASSWORD}
+#      - PMA_ARBITRARY=1
+  redis:
+    image: 'bitnami/redis:latest'
+    container_name: "b24_redis"
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    networks:
+      - backend
+    ports:
+      - 6379:6379
+  mongo:
+    image: mongo
+#    restart: always
+    environment:
+      MONGO_INITDB_DATABASE: admin
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: example
+    ports:
+      - 27018:27017
+    networks:
+      - backend
+  node:
+    image: node:22.12.0
+    container_name: "b24_node"
+    tty: true
+    stdin_open: true
+    working_dir: /app
+    volumes:
+      - ./:/app
+
+  mariadb:
+    image: wodby/mariadb:latest
+    restart: always
+    container_name: "b24_mariadb"
+    stop_grace_period: 30s
+    ports:
+      - 3309:3306
+    environment:
+       - MYSQL_ROOT_PASSWORD=root
+       - MYSQL_DATABASE=${DB_DATABASE}
+       - MYSQL_USER=${DB_USERNAME}
+       - MYSQL_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - ./db/mariadb-init:/var/lib/init # Place init .sql file(s) here.
+      - ./db/mariadb:/var/lib/mysql # I want to manage volumes manually.
+    networks:
+      - backend
+  nginx:
+    image: wodby/nginx:1.20-5.14.1
+    container_name: "b24_nginx"
+    depends_on:
+      - php
+    environment:
+      NGINX_STATIC_OPEN_FILE_CACHE: "off"
+      NGINX_ERROR_LOG_LEVEL: debug
+      NGINX_BACKEND_HOST: php
+      NGINX_SERVER_ROOT: /var/www/html/public
+      NGINX_VHOST_PRESET: php
+    volumes:
+      - ./:/var/www/html
+    ports:
+      - 8000:80
+    networks:
+      - backend
